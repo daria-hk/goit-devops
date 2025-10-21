@@ -27,27 +27,48 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo "Detected Linux"
-
-    echo "Updating packages..."
+    echo "Updating system packages..."
     sudo apt update -y
 
-    echo "Installing Docker..."
-    sudo apt install -y docker.io
+    # --- Install Docker ---
+    if ! command -v docker &> /dev/null; then
+        echo "Installing Docker..."
+        sudo apt install -y docker.io
+        sudo systemctl enable docker
+        sudo systemctl start docker
+    else
+        echo "Docker is already installed."
+    fi
 
-    echo "Installing Docker Compose..."
-    sudo apt install -y docker-compose
+    # --- Install Docker Compose ---
+    if ! command -v docker-compose &> /dev/null; then
+        echo "Installing Docker Compose..."
+        sudo apt install -y docker-compose
+    else
+        echo "Docker Compose is already installed."
+    fi
 
-    echo "Installing Python 3.9+ and pip..."
-    sudo apt install -y python3 python3-pip
+    # --- Install Python 3.9+ and pip ---
+    if ! command -v python3 &> /dev/null; then
+        echo "Installing Python 3 and pip..."
+        sudo apt install -y python3 python3-pip
+    else
+        echo "Python is already installed."
+    fi
+
+    # --- Install Django ---
+    if ! python3 -m django --version &> /dev/null; then
+        echo "Installing Django..."
+        pip3 install --upgrade pip
+        pip3 install django
+    else
+        echo "Django is already installed."
+    fi
+
 else
     echo "Unsupported OS. Only macOS and Ubuntu/Debian are supported."
     exit 1
 fi
-
-# --- Install Django ---
-echo "Installing Django via pip..."
-pip3 install --upgrade pip
-pip3 install django
 
 echo "Done! Installed Docker, Docker Compose, Python, and Django."
 echo "Versions installed:"
@@ -55,4 +76,3 @@ docker --version || echo "Docker not found in PATH."
 docker-compose --version || echo "Docker Compose not found in PATH."
 python3 --version
 django-admin --version
-
