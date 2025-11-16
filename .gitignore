@@ -2,3 +2,4 @@
 .terraform/
 *.tfstate
 *.tfstate.backup
+charts/django-app/values-secret.yaml

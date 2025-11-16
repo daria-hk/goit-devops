@@ -31,11 +31,29 @@ project/
 │   │   ├── variables.tf
 │   │   ├── outputs.tf
 │   │
-│   └── ecr/
-│       ├── ecr.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-└── README.md              # Project documentation
+│   ├── ecr/
+│   |   ├── ecr.tf
+│   |   ├── variables.tf
+│   |   ├── outputs.tf
+|   |
+|   |
+|   └── eks/
+|       ├── eks.tf
+|       ├── variables.tf
+|       ├── outputs.tf
+├── charts/
+│   └── django-app/
+│       ├── templates/
+│       │   ├── deployment.yaml
+│       │   ├── service.yaml
+│       │   ├── hpa.yaml
+│       │   ├── configmap.yaml
+│       │   ├── secret.yaml
+|       |   └── values-secret.yaml  # gitignored
+│       ├── values.yaml
+│       └── Chart.yaml
+│
+└── README.md             # Project documentation
 ```
 
 ---
@@ -128,14 +146,106 @@ Outputs:
 
 ---
 
-## 📝 Notes
+## eks module
 
-- All resources are deployed in the region **eu-central-1**
-- The S3 backend must exist before enabling backend configuration
-- State locking (DynamoDB) prevents concurrent Terraform executions
+Deploys a fully functional EKS cluster.
+
+**Resources:**
+
+- IAM roles for cluster and worker nodes
+- EKS control plane
+- Managed Node Group
+- Networking integration with VPC subnets
+
+**Outputs:**
+
+- `eks_cluster_name`
+- `eks_cluster_endpoint`
+- `node_role_arn`
 
 ---
 
-## ✔️ Project Ready
+# Docker & ECR Workflow (Django Application)
 
-This README provides a full overview of your AWS Terraform infrastructure. You can now use it for deployment, documentation, or as coursework submission.
+### 1. Build the Docker image
+
+```bash
+docker build -t django-app:latest .
+```
+
+### 2. Authenticate Docker to ECR
+
+```bash
+aws ecr get-login-password --region eu-central-1   | docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com
+```
+
+### 3. Tag and push the image
+
+```bash
+docker tag django-app:latest   <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/lesson-5-ecr:latest
+
+docker push   <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/lesson-5-ecr:latest
+```
+
+---
+
+# Connect kubectl to EKS
+
+```bash
+aws eks --region eu-central-1 update-kubeconfig --name <cluster_name>
+kubectl get nodes
+```
+
+---
+
+# Helm Chart (Django Application)
+
+### Deployment
+
+Runs the Django container from ECR with environment variables from ConfigMap and Secret.
+
+### Service (LoadBalancer)
+
+Exposes the Django application externally.
+
+### Horizontal Pod Autoscaler
+
+Scales between **2 and 6 pods** when CPU exceeds **70%**.
+
+### ConfigMap
+
+Stores non-sensitive environment variables.
+
+### Secret (gitignored)
+
+Stores sensitive data:
+
+- Django secret key
+- Database password
+
+### values.yaml
+
+Defines image configuration, service settings, autoscaler configuration, and environment variables.
+
+---
+
+# Notes
+
+- All resources are deployed in **eu-central-1**.
+- `secret.yaml` is excluded from Git for security.
+- For deployment overrides, `values-secret.yaml` can be used (also gitignored).
+- Terraform backend requires the S3 bucket to exist before enabling it.
+- EKS access requires AWS CLI and kubectl installed.
+
+---
+
+# Project Ready
+
+This README includes full documentation for:
+
+- Terraform infrastructure
+- VPC, S3, DynamoDB, ECR
+- EKS cluster
+- Docker image workflow
+- Helm chart for Django deployment
+- kubectl integration

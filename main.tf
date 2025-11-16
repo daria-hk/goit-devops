@@ -5,7 +5,7 @@ provider "aws" {
 # EC2 Instance
 resource "aws_instance" "example" {
   ami           = "ami-089a7a2a13629ecc4"
-  instance_type = "t3.micro"              
+  instance_type = "t3.small"              
 
   tags = {
     Name = "lesson5"
@@ -50,4 +50,15 @@ module "ecr" {
   source       = "./modules/ecr"
   ecr_name     = "lesson-5-ecr"
   scan_on_push = true
+}
+
+# EKS Module
+module "eks" {
+  source          = "./modules/eks"          
+  cluster_name    = "eks-cluster-demo"
+  subnet_ids      = module.vpc.public_subnets
+  instance_type   = "t3.small"
+  desired_size    = 1
+  max_size        = 2
+  min_size        = 1
 }

@@ -1,0 +1,21 @@
+image:
+  repository: 601710820863.dkr.ecr.eu-central-1.amazonaws.com/lesson-5-ecr
+  tag: "latest"
+  pullPolicy: Always
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8000
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+env:
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_NAME: "mydb"
+  POSTGRES_USER: "postgres"
