@@ -48,9 +48,10 @@ project/
 │       │   ├── service.yaml
 │       │   ├── hpa.yaml
 │       │   ├── configmap.yaml
-│       │   ├── secret.yaml
-|       |   └── values-secret.yaml  # gitignored
+│       │   └── secret.yaml
+|       |   
 │       ├── values.yaml
+|       ├── values-secret.yaml  # gitignored
 │       └── Chart.yaml
 │
 └── README.md             # Project documentation
