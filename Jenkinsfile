@@ -1,7 +1,7 @@
 pipeline {
   agent {
     kubernetes {
-yaml """
+      yaml """
 apiVersion: v1
 kind: Pod
 metadata:
@@ -24,21 +24,28 @@ spec:
 """
     }
   }
+
   environment {
     ECR_REGISTRY = '601710820863.dkr.ecr.eu-central-1.amazonaws.com'
-    ECR_REPO = 'lesson-5-ecr'
-    CHART_PATH = 'charts/django-app/values.yaml'
+    ECR_REPO     = 'lesson-5-ecr'
+    CHART_PATH   = 'charts/django-app/values.yaml'
   }
+
   stages {
+
     stage('Prepare') {
       steps {
         container('git') {
-          // Підтягуємо весь репо в робочий простір
+          // Repo in Workspace ziehen
           checkout scm
+
           script {
-            // тег образу - використай timestamp або git commit id
-            IMAGE_TAG = sh(returnStdout: true, script: "git rev-parse --short HEAD").trim()
-            env.IMAGE_TAG = IMAGE_TAG
+            // IMAGE_TAG global über env setzen (Git Commit Hash kurz)
+            env.IMAGE_TAG = sh(
+              returnStdout: true,
+              script: "git rev-parse --short HEAD"
+            ).trim()
+            echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
           }
         }
       }
@@ -46,32 +53,31 @@ spec:
 
     stage('Build & Push image (Kaniko)') {
       steps {
-        script {
-          // Беремо AWS creds з Jenkins credentials: ID = aws-creds (username=AWS_ACCESS_KEY_ID, password=AWS_SECRET_ACCESS_KEY)
-          withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY'),
-                           string(credentialsId: 'git-ssh-key', variable: 'GIT_SSH_KEY')]) {
-            // створимо docker config у томі під Kaniko
+        container('kaniko') {
+          // AWS Creds in den Kaniko-Container injizieren
+          withCredentials([
+            usernamePassword(
+              credentialsId: 'aws-creds',
+              usernameVariable: 'AWS_ACCESS_KEY_ID',
+              passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+            )
+          ]) {
             sh '''
-            mkdir -p ~/.docker
-            cat > ~/.docker/config.json <<EOF
+            echo "Running Kaniko..."
+
+            # Optional: Docker config anlegen, falls Credential Helper genutzt wird
+            mkdir -p /root/.docker
+            cat > /root/.docker/config.json <<EOF
             {"credsStore":"ecr-login"}
             EOF
+
+            /kaniko/executor \
+              --context $WORKSPACE \
+              --dockerfile $WORKSPACE/Dockerfile \
+              --destination $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG \
+              --cache=true
             '''
-            // Додатково: налаштування для Kaniko - передамо AWS creds в контейнер Kaniko через env
           }
-        }
-        // Запускаємо контейнер kaniko (kubectl-проxies handled by Jenkins kubernetes plugin)
-        container('kaniko') {
-          // env AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY повинні бути доступні через Jenkins credentials на вузлі
-          sh '''
-          echo "Running Kaniko..."
-          # Kaniko reads AWS creds from environment variables
-          /kaniko/executor \
-            --context ${WORKSPACE} \
-            --dockerfile ${WORKSPACE}/Dockerfile \
-            --destination ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG} \
-            --cache=true
-          '''
         }
       }
     }
@@ -79,15 +85,37 @@ spec:
     stage('Update Helm chart values.yaml') {
       steps {
         container('git') {
-          // Змінюємо charts/django-app/values.yaml: оновлюємо image.tag
-          sh """
-          git config user.email "ci@example.com"
-          git config user.name "ci-bot"
-          yq eval -i '.image.tag = env(IMAGE_TAG)' ${CHART_PATH}
-          git add ${CHART_PATH}
-          git commit -m "ci: bump image tag to ${IMAGE_TAG} [skip ci]" || echo "no changes to commit"
-          git push origin HEAD:main
-          """
+          // Git Push über SSH-Key aus Jenkins-Credential
+          withCredentials([
+            string(credentialsId: 'git-ssh-key', variable: 'GIT_SSH_KEY')
+          ]) {
+            sh '''
+            # Tools installieren
+            apk add --no-cache yq openssh
+
+            # SSH Key vorbereiten
+            mkdir -p /root/.ssh
+            echo "$GIT_SSH_KEY" > /root/.ssh/id_rsa
+            chmod 600 /root/.ssh/id_rsa
+
+            # StrictHostKeyChecking ausschalten (oder Hostkeys sauber managen)
+            echo "Host *" > /root/.ssh/config
+            echo "    StrictHostKeyChecking no" >> /root/.ssh/config
+
+            export GIT_SSH_COMMAND="ssh -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no"
+
+            git config user.email "ci@example.com"
+            git config user.name "ci-bot"
+
+            # image.tag in values.yaml auf neues IMAGE_TAG setzen
+            yq eval -i '.image.tag = env(IMAGE_TAG)' "$CHART_PATH"
+
+            git status
+            git add "$CHART_PATH"
+            git commit -m "ci: bump image tag to $IMAGE_TAG [skip ci]" || echo "no changes to commit"
+            git push origin HEAD:main
+            '''
+          }
         }
       }
     }
@@ -96,8 +124,7 @@ spec:
       steps {
         container('awscli') {
           sh '''
-          # optionally run helm lint locally (if helm available in image) - many setups run helm from Jenkins master job or agent with helm
-          echo "Helm checks (run in Jenkins or separate job as needed)"
+          echo "Helm checks können hier ausgeführt werden (lint, template, usw.)"
           '''
         }
       }
