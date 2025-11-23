@@ -25,8 +25,7 @@ spec:
     }
   }
   environment {
-    // Будь-які значення можна зберегти в Jenkins Credentials та прив'язати через withCredentials
-    ECR_REGISTRY = '606705194042.dkr.ecr.us-west-2.amazonaws.com'
+    ECR_REGISTRY = '601710820863.dkr.ecr.eu-central-1.amazonaws.com'
     ECR_REPO = 'lesson-5-ecr'
     CHART_PATH = 'charts/django-app/values.yaml'
   }
