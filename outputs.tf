@@ -11,3 +11,12 @@ output "dynamodb_table_name" {
 output "vpc_id" {
   value = module.vpc.vpc_id
 }
+
+output "jenkins_release" {
+  value = module.jenkins.jenkins_release_name
+}
+
+output "jenkins_namespace" {
+  value = module.jenkins.jenkins_namespace
+}
+
