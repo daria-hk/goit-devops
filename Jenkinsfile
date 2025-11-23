@@ -1,38 +1,26 @@
 pipeline {
   agent {
     kubernetes {
-      yaml """
+yaml """
 apiVersion: v1
 kind: Pod
 metadata:
   labels:
     jenkins: kaniko
 spec:
-  serviceAccountName: jenkins-kaniko-sa
+  serviceAccountName: jenkins-sa
   containers:
-  - name: kaniko
-    image: gcr.io/kaniko-project/executor:latest
-    args:
-      - "--context=dir://workspace"
-      - "--dockerfile=/workspace/Dockerfile"
-      - "--destination=\${ECR_REGISTRY}/\${ECR_REPO}:\${IMAGE_TAG}"
-      - "--cache=true"
-    volumeMounts:
-      - name: kaniko-secret
-        mountPath: /kaniko/.docker
-  - name: git
-    image: alpine/git:latest
-    command:
-      - cat
-    tty: true
-  - name: awscli
-    image: amazon/aws-cli:2.9.0
-    command:
-      - cat
-    tty: true
-  volumes:
-    - name: kaniko-secret
-      emptyDir: {}
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:latest
+      tty: true
+    - name: git
+      image: alpine/git:latest
+      command: ["cat"]
+      tty: true
+    - name: awscli
+      image: amazon/aws-cli:2.9.0
+      command: ["cat"]
+      tty: true
 """
     }
   }
