@@ -13,8 +13,8 @@ spec:
     - name: kaniko
       image: gcr.io/kaniko-project/executor:latest
       args:
-        - "--context=${WORKSPACE}"
-        - "--dockerfile=${WORKSPACE}/Dockerfile"
+        - "--context=${env.WORKSPACE}"
+        - "--dockerfile=${env.WORKSPACE}/Dockerfile"
         - "--destination=${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
         - "--cache=true"
       tty: true
