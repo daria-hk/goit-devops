@@ -22,7 +22,7 @@ provider "aws" {
 # EC2 Instance
 resource "aws_instance" "example" {
   ami           = "ami-089a7a2a13629ecc4"
-  instance_type = "t3.medium"
+  instance_type = "t3.large"
 
   tags = {
     Name = "lesson5"
@@ -74,7 +74,7 @@ module "eks" {
   source        = "./modules/eks"
   cluster_name  = "eks-cluster-demo"
   subnet_ids    = module.vpc.public_subnets
-  instance_type = "t3.medium"
+  instance_type = "t3.large"
   desired_size  = 1
   max_size      = 2
   min_size      = 1
