@@ -71,6 +71,32 @@ spec:
     }
     
     stages {
+        stage('Debug AWS Credentials') {
+            steps {
+                container('kaniko') {
+                    script {
+                        echo "🔍 Checking AWS Credentials and ECR Access..."
+                        sh '''
+                            echo "=== Environment Variables ==="
+                            env | grep -i aws || echo "No AWS env vars found"
+                            
+                            echo ""
+                            echo "=== AWS Caller Identity ==="
+                            aws sts get-caller-identity --region eu-central-1 || echo "STS call failed"
+                            
+                            echo ""
+                            echo "=== ECR Repositories ==="
+                            aws ecr describe-repositories --repository-names lesson-5-ecr --region eu-central-1 || echo "ECR describe failed"
+                            
+                            echo ""
+                            echo "=== ECR Auth Token ==="
+                            aws ecr get-authorization-token --region eu-central-1 && echo "✅ Token obtained successfully!" || echo "❌ Failed to get token"
+                        '''
+                    }
+                }
+            }
+        }
+        
         stage('Checkout Code') {
             steps {
                 echo "🔍 Checking out source code..."
