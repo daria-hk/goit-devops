@@ -70,6 +70,32 @@ resource "aws_iam_role_policy_attachment" "node3" {
   role       = aws_iam_role.eks_node_role.name
 }
 
+# Additional ECR Push Policy for Jenkins/Kaniko
+resource "aws_iam_role_policy" "ecr_push" {
+  name = "${var.cluster_name}-ecr-push"
+  role = aws_iam_role.eks_node_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # Node Group
 resource "aws_eks_node_group" "nodes" {
   cluster_name    = aws_eks_cluster.eks.name
