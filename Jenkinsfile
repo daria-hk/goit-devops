@@ -1,139 +1,184 @@
 pipeline {
-  agent {
-    kubernetes {
-      yaml """
+    agent {
+        kubernetes {
+            yaml """
 apiVersion: v1
 kind: Pod
 metadata:
   labels:
-    jenkins: kaniko
+    jenkins: agent
 spec:
-  serviceAccountName: jenkins-sa
+  serviceAccountName: jenkins
   containers:
-    - name: kaniko
-      image: gcr.io/kaniko-project/executor:latest
-      tty: true
-    - name: git
-      image: alpine/git:latest
-      command: ["cat"]
-      tty: true
-    - name: awscli
-      image: amazon/aws-cli:2.9.0
-      command: ["cat"]
-      tty: true
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:v1.19.0-debug
+    imagePullPolicy: Always
+    command:
+    - /busybox/cat
+    tty: true
+    volumeMounts:
+    - name: docker-config
+      mountPath: /kaniko/.docker
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+  - name: git
+    image: alpine/git:latest
+    imagePullPolicy: Always
+    command:
+    - cat
+    tty: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  volumes:
+  - name: docker-config
+    secret:
+      secretName: docker-config
 """
-    }
-  }
-
-  environment {
-    ECR_REGISTRY = '601710820863.dkr.ecr.eu-central-1.amazonaws.com'
-    ECR_REPO     = 'lesson-5-ecr'
-    CHART_PATH   = 'charts/django-app/values.yaml'
-  }
-
-  stages {
-
-    stage('Prepare') {
-      steps {
-        container('git') {
-          // Repo in Workspace ziehen
-          checkout scm
-
-          script {
-            // IMAGE_TAG global über env setzen (Git Commit Hash kurz)
-            env.IMAGE_TAG = sh(
-              returnStdout: true,
-              script: "git rev-parse --short HEAD"
-            ).trim()
-            echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
-          }
         }
-      }
     }
-
-    stage('Build & Push image (Kaniko)') {
-      steps {
-        container('kaniko') {
-          // AWS Creds in den Kaniko-Container injizieren
-          withCredentials([
-            usernamePassword(
-              credentialsId: 'aws-creds',
-              usernameVariable: 'AWS_ACCESS_KEY_ID',
-              passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-            )
-          ]) {
-            sh '''
-            echo "Running Kaniko..."
-
-            # Optional: Docker config anlegen, falls Credential Helper genutzt wird
-            mkdir -p /root/.docker
-            cat > /root/.docker/config.json <<EOF
-            {"credsStore":"ecr-login"}
-            EOF
-
-            /kaniko/executor \
-              --context $WORKSPACE \
-              --dockerfile $WORKSPACE/Dockerfile \
-              --destination $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG \
-              --cache=true
-            '''
-          }
+    
+    environment {
+        // ECR Konfiguration
+        ECR_REGISTRY = credentials('ecr-registry')
+        ECR_REPOSITORY = 'lesson-5-ecr'
+        AWS_REGION = 'eu-central-1'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        
+        // GitHub Konfiguration
+        GITHUB_CREDENTIALS_ID = 'github-credentials'
+        GITHUB_REPO = 'https://github.com/daria-hk/goit-devops.git'
+        GITHUB_USER = 'daria-hk'
+        GITHUB_EMAIL = 'jenkins@daria-hk.com'
+        
+        // Chart Pfad
+        CHART_PATH = 'charts/django-app'
+        VALUES_FILE = 'charts/django-app/values.yaml'
+    }
+    
+    stages {
+        stage('Checkout Code') {
+            steps {
+                echo "🔍 Checking out source code..."
+                checkout scm
+            }
         }
-      }
-    }
-
-    stage('Update Helm chart values.yaml') {
-      steps {
-        container('git') {
-          // Git Push über SSH-Key aus Jenkins-Credential
-          withCredentials([
-            string(credentialsId: 'git-ssh-key', variable: 'GIT_SSH_KEY')
-          ]) {
-            sh '''
-            # Tools installieren
-            apk add --no-cache yq openssh
-
-            # SSH Key vorbereiten
-            mkdir -p /root/.ssh
-            echo "$GIT_SSH_KEY" > /root/.ssh/id_rsa
-            chmod 600 /root/.ssh/id_rsa
-
-            # StrictHostKeyChecking ausschalten (oder Hostkeys sauber managen)
-            echo "Host *" > /root/.ssh/config
-            echo "    StrictHostKeyChecking no" >> /root/.ssh/config
-
-            export GIT_SSH_COMMAND="ssh -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no"
-
-            git config user.email "ci@example.com"
-            git config user.name "ci-bot"
-
-            # image.tag in values.yaml auf neues IMAGE_TAG setzen
-            yq eval -i '.image.tag = env(IMAGE_TAG)' "$CHART_PATH"
-
-            git status
-            git add "$CHART_PATH"
-            git commit -m "ci: bump image tag to $IMAGE_TAG [skip ci]" || echo "no changes to commit"
-            git push origin HEAD:main
-            '''
-          }
+        
+        stage('Build & Push Docker Image') {
+            steps {
+                container('kaniko') {
+                    script {
+                        echo "🔨 Building Docker image with Kaniko..."
+                        echo "📦 Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                        
+                        // Kaniko Build & Push zu ECR
+                        sh """
+                            /kaniko/executor \
+                                --context=\${WORKSPACE} \
+                                --dockerfile=\${WORKSPACE}/Dockerfile \
+                                --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
+                                --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:latest \
+                                --cache=true \
+                                --compressed-caching=false \
+                                --cleanup
+                        """
+                        
+                        echo "✅ Image successfully pushed to ECR!"
+                    }
+                }
+            }
         }
-      }
-    }
-
-    stage('Helm lint & template (optional)') {
-      steps {
-        container('awscli') {
-          sh '''
-          echo "Helm checks können hier ausgeführt werden (lint, template, usw.)"
-          '''
+        
+        stage('Update Helm Chart') {
+            steps {
+                container('git') {
+                    script {
+                        echo "📝 Updating Helm Chart values.yaml..."
+                        
+                        withCredentials([usernamePassword(
+                            credentialsId: GITHUB_CREDENTIALS_ID,
+                            usernameVariable: 'GIT_USERNAME',
+                            passwordVariable: 'GIT_PASSWORD'
+                        )]) {
+                            sh """
+                                # Git Konfiguration
+                                git config --global user.name "${GITHUB_USER}"
+                                git config --global user.email "${GITHUB_EMAIL}"
+                                git config --global credential.helper store
+                                
+                                # Credentials für Git speichern
+                                echo "https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com" > ~/.git-credentials
+                                
+                                # Repository klonen (falls nicht bereits vorhanden)
+                                if [ ! -d ".git" ]; then
+                                    echo "🔄 Cloning repository..."
+                                    git clone ${GITHUB_REPO} temp-repo
+                                    cd temp-repo
+                                else
+                                    echo "📂 Using existing repository"
+                                    git pull origin main
+                                fi
+                                
+                                # Values.yaml aktualisieren
+                                echo "🔄 Updating image tag in ${VALUES_FILE}..."
+                                
+                                # Sed command zum Aktualisieren des Image Tags
+                                sed -i "s|tag:.*|tag: \\"${IMAGE_TAG}\\"|g" ${VALUES_FILE}
+                                
+                                # Überprüfen ob Änderungen vorhanden sind
+                                if git diff --quiet; then
+                                    echo "ℹ️  No changes detected in values.yaml"
+                                else
+                                    echo "✅ Changes detected, committing..."
+                                    
+                                    # Commit und Push
+                                    git add ${VALUES_FILE}
+                                    git commit -m "🚀 Update image tag to ${IMAGE_TAG} [Jenkins Build #${BUILD_NUMBER}]"
+                                    git push origin main
+                                    
+                                    echo "✅ Successfully pushed changes to Git!"
+                                fi
+                            """
+                        }
+                    }
+                }
+            }
         }
-      }
+        
+        stage('Verify Deployment') {
+            steps {
+                echo "✅ Pipeline completed successfully!"
+                echo "📦 Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                echo "🔄 Helm chart updated in Git"
+                echo "⏳ Waiting for Argo CD to sync..."
+            }
+        }
     }
-  }
-
-  post {
-    always {
-      echo "Pipeline finished"
+    
+    post {
+        success {
+            echo "🎉 Pipeline succeeded!"
+            echo "🚀 New image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+            echo "📝 Git commit pushed to main branch"
+            echo "🔄 Argo CD will sync automatically"
+        }
+        failure {
+            echo "❌ Pipeline failed!"
+            echo "Please check the logs above for errors."
+        }
+        always {
+            echo "🧹 Cleaning up workspace..."
+            cleanWs()
+        }
     }
-  }
 }
+

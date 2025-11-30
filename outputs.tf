@@ -12,11 +12,28 @@ output "vpc_id" {
   value = module.vpc.vpc_id
 }
 
-output "jenkins_release" {
-  value = module.jenkins.jenkins_release_name
+output "ecr_repository_url" {
+  description = "ECR Repository URL"
+  value       = module.ecr.ecr_url
 }
 
-output "jenkins_namespace" {
-  value = module.jenkins.jenkins_namespace
+output "eks_cluster_name" {
+  description = "EKS Cluster Name"
+  value       = module.eks.eks_cluster_name
 }
 
+output "eks_cluster_endpoint" {
+  description = "EKS Cluster Endpoint"
+  value       = module.eks.eks_cluster_endpoint
+}
+
+output "jenkins_url" {
+  description = "Jenkins URL"
+  value       = module.jenkins.jenkins_url
+}
+
+output "jenkins_admin_password" {
+  description = "Jenkins Admin Password"
+  value       = module.jenkins.jenkins_admin_password
+  sensitive   = true
+}

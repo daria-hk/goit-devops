@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.0"
+  
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -6,11 +8,15 @@ terraform {
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = "~> 2.0"
+      version = "~> 2.23"
     }
     helm = {
       source  = "hashicorp/helm"
-      version = "~> 2.0"
+      version = "~> 2.11"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
     }
   }
 }
@@ -19,10 +25,46 @@ provider "aws" {
   region = "eu-central-1"
 }
 
+# Kubernetes Provider - wird nach EKS-Erstellung konfiguriert
+provider "kubernetes" {
+  host                   = try(module.eks.eks_cluster_endpoint, "")
+  cluster_ca_certificate = try(base64decode(module.eks.eks_cluster_ca_certificate), "")
+  
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args = [
+      "eks",
+      "get-token",
+      "--cluster-name",
+      try(module.eks.eks_cluster_name, "")
+    ]
+  }
+}
+
+# Helm Provider - wird nach EKS-Erstellung konfiguriert
+provider "helm" {
+  kubernetes {
+    host                   = try(module.eks.eks_cluster_endpoint, "")
+    cluster_ca_certificate = try(base64decode(module.eks.eks_cluster_ca_certificate), "")
+    
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args = [
+        "eks",
+        "get-token",
+        "--cluster-name",
+        try(module.eks.eks_cluster_name, "")
+      ]
+    }
+  }
+}
+
 # EC2 Instance
 resource "aws_instance" "example" {
   ami           = "ami-089a7a2a13629ecc4"
-  instance_type = "t3.micro"
+  instance_type = "t3.small"              
 
   tags = {
     Name = "lesson5"
@@ -38,25 +80,25 @@ module "s3_backend" {
 
 # VPC Module
 module "vpc" {
-  source         = "./modules/vpc"
-  vpc_cidr_block = "10.0.0.0/16"
+  source             = "./modules/vpc"
+  vpc_cidr_block     = "10.0.0.0/16"
 
-  public_subnets = [
+  public_subnets     = [
     "10.0.1.0/24",
     "10.0.2.0/24",
-    "10.0.3.0/24",
+    "10.0.3.0/24"
   ]
 
-  private_subnets = [
+  private_subnets    = [
     "10.0.4.0/24",
     "10.0.5.0/24",
-    "10.0.6.0/24",
+    "10.0.6.0/24"
   ]
 
   availability_zones = [
     "eu-central-1a",
     "eu-central-1b",
-    "eu-central-1c",
+    "eu-central-1c"
   ]
 
   vpc_name = "lesson-5-vpc"
@@ -71,52 +113,34 @@ module "ecr" {
 
 # EKS Module
 module "eks" {
-  source        = "./modules/eks"
-  cluster_name  = "eks-cluster-demo"
-  subnet_ids    = module.vpc.public_subnets
-  instance_type = "t3.micro"
-  desired_size  = 1
-  max_size      = 2
-  min_size      = 1
+  source          = "./modules/eks"          
+  cluster_name    = "eks-cluster-demo"
+  subnet_ids      = module.vpc.public_subnets
+  instance_type   = "t3.small"
+  desired_size    = 2
+  max_size        = 2
+  min_size        = 1
 }
 
-# EKS cluster data for providers
-data "aws_eks_cluster" "eks" {
-  name = module.eks.eks_cluster_name
-}
-
-data "aws_eks_cluster_auth" "eks" {
-  name = module.eks.eks_cluster_name
-}
-
-provider "kubernetes" {
-  host                   = data.aws_eks_cluster.eks.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.eks.token
-}
-
-provider "helm" {
-  kubernetes {
-    host                   = data.aws_eks_cluster.eks.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.eks.token
-  }
-}
-
+# Jenkins Module
 module "jenkins" {
-  source            = "./modules/jenkins"
-  cluster_name      = module.eks.eks_cluster_name
-  oidc_provider_arn = module.eks.oidc_provider_arn
-  oidc_provider_url = module.eks.oidc_provider_url
-
-  github_pat      = var.github_pat
-  github_user     = var.github_user
-  github_repo_url = var.github_repo_url
-
+  source                 = "./modules/jenkins"
+  
+  # Jenkins Konfiguration
+  namespace              = "jenkins"
+  chart_version          = "5.1.27"
+  service_type           = "LoadBalancer"
+  
+  # ECR Konfiguration
+  ecr_registry           = regex("^(.*)/.*$", module.ecr.ecr_url)[0]
+  ecr_repository_url     = module.ecr.ecr_url
+  aws_region             = "eu-central-1"
+  
+  # GitHub Credentials (aus variables)
+  github_pat             = var.github_pat
+  github_user            = var.github_user
+  github_repo_url        = var.github_repo_url
+  github_email           = var.github_email
+  
   depends_on = [module.eks]
-
-  providers = {
-    helm       = helm
-    kubernetes = kubernetes
-  }
 }

@@ -1,0 +1,45 @@
+controller:
+  image:
+    registry: "docker.io"
+    repository: "jenkins/jenkins"
+    tag: "lts"
+
+  serviceType: LoadBalancer
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+  javaOpts: "-Xms512m -Xmx1024m"
+
+  installPlugins:
+    - kubernetes
+    - workflow-aggregator
+    - git
+    - configuration-as-code
+    - credentials-binding
+
+  admin:
+    username: "admin"
+    password: "admin123"
+
+  serviceAccount:
+    create: true
+    name: jenkins
+
+agent:
+  enabled: true
+
+persistence:
+  enabled: true
+  storageClass: "gp2-csi"
+  accessMode: "ReadWriteOnce"
+  size: "10Gi"
+
+rbac:
+  create: true
+  readSecrets: true
