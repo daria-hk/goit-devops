@@ -1,2 +1,39 @@
-# Argo CD Application template
-
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.application.name }}
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: {{ .Values.application.repoURL }}
+    targetRevision: {{ .Values.application.targetRevision }}
+    path: {{ .Values.application.path }}
+    helm:
+      valueFiles:
+        - values.yaml
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.application.namespace }}
+  
+  syncPolicy:
+    {{- if .Values.application.autoSync }}
+    automated:
+      prune: {{ .Values.application.prune }}
+      selfHeal: {{ .Values.application.selfHeal }}
+      allowEmpty: false
+    {{- end }}
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

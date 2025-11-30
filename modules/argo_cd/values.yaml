@@ -1,2 +1,41 @@
-# Кастомна конфігурація Argo CD
+# Argo CD custom configuration
+global:
+  image:
+    tag: "v2.9.3"
 
+server:
+  service:
+    type: LoadBalancer
+  extraArgs:
+    - --insecure
+  config:
+    repositories: |
+      - type: git
+        url: https://github.com/daria-hk/goit-devops.git
+
+controller:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+applicationSet:
+  enabled: true
+
+notifications:
+  enabled: false
+
+dex:
+  enabled: false

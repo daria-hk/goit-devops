@@ -19,3 +19,7 @@ env:
   POSTGRES_PORT: "5432"
   POSTGRES_NAME: "mydb"
   POSTGRES_USER: "postgres"
+
+secrets:
+  DJANGO_SECRET_KEY: "change-me-in-production-secret-key-12345678"
+  POSTGRES_PASSWORD: "postgres"

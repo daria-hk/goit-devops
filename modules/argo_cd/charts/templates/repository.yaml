@@ -1,2 +1,22 @@
-# Argo CD Repository template
+{{- if .Values.repository }}
+{{- if .Values.repository.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.repository.name }}
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: {{ .Values.repository.url }}
+  {{- if .Values.repository.username }}
+  username: {{ .Values.repository.username }}
+  {{- end }}
+  {{- if .Values.repository.password }}
+  password: {{ .Values.repository.password }}
+  {{- end }}
+{{- end }}
+{{- end }}
 

@@ -1,2 +1,16 @@
-# Список applications, repositories
+application:
+  name: django-app
+  namespace: default
+  repoURL: https://github.com/daria-hk/goit-devops.git
+  path: charts/django-app
+  targetRevision: main
+  autoSync: true
+  prune: true
+  selfHeal: true
 
+repository:
+  enabled: true
+  name: github-repo
+  url: https://github.com/daria-hk/goit-devops.git
+  username: ""
+  password: ""
