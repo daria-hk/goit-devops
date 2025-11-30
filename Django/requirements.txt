@@ -1,0 +1,17 @@
+# Django und Core Dependencies
+Django==4.2.7
+gunicorn==21.2.0
+psycopg2-binary==2.9.9
+
+# Environment
+python-decouple==3.8
+
+# API
+djangorestframework==3.14.0
+
+# Database
+dj-database-url==2.1.0
+
+# Utilities
+requests==2.31.0
+
