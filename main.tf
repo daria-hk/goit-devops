@@ -144,3 +144,26 @@ module "jenkins" {
   
   depends_on = [module.eks]
 }
+
+# ===============================
+# Argo CD Module
+# ===============================
+module "argo_cd" {
+  source = "./modules/argo_cd"
+  
+  namespace       = "argocd"
+  chart_version   = "5.51.6"
+  
+  # GitHub Configuration
+  github_repo_url = var.github_repo_url
+  github_user     = var.github_user
+  github_pat      = var.github_pat
+  
+  # Application Configuration
+  app_name         = "django-app"
+  app_path         = "charts/django-app"
+  app_namespace    = "default"
+  target_revision  = "main"
+  
+  depends_on = [module.eks, module.jenkins]
+}
