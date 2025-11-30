@@ -215,8 +215,8 @@ EOF
                                 else
                                     echo "📂 Using existing repository"
                                     # Switch to branch (Jenkins checks out in detached HEAD state)
-                                    git checkout lesson-8-9
-                                    git pull origin lesson-8-9
+                                    git checkout main
+                                    git pull origin main
                                 fi
                                 
                                 # Values.yaml aktualisieren
@@ -234,7 +234,7 @@ EOF
                                     # Commit und Push
                                     git add ${VALUES_FILE}
                                     git commit -m "🚀 Update image tag to ${IMAGE_TAG} [Jenkins Build #${BUILD_NUMBER}]"
-                                    git push origin lesson-8-9
+                                    git push origin main
                                     
                                     echo "✅ Successfully pushed changes to Git!"
                                 fi
@@ -259,7 +259,7 @@ EOF
         success {
             echo "🎉 Pipeline succeeded!"
             echo "🚀 New image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-            echo "📝 Git commit pushed to lesson-8-9 branch"
+            echo "📝 Git commit pushed to main branch"
             echo "🔄 Argo CD will sync automatically"
         }
         failure {
