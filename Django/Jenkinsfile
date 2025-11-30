@@ -169,8 +169,8 @@ EOF
                         // Kaniko Build & Push zu ECR (AWS Credentials via ENV vars)
                         sh """
                             /kaniko/executor \
-                                --context=\${WORKSPACE} \
-                                --dockerfile=\${WORKSPACE}/Dockerfile \
+                                --context=\${WORKSPACE}/Django \
+                                --dockerfile=\${WORKSPACE}/Django/Dockerfile \
                                 --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
                                 --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:latest \
                                 --cache=false \
