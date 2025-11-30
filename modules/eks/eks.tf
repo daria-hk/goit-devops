@@ -66,7 +66,7 @@ resource "aws_iam_role_policy_attachment" "node2" {
 }
 
 resource "aws_iam_role_policy_attachment" "node3" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
   role       = aws_iam_role.eks_node_role.name
 }
 
