@@ -135,6 +135,7 @@ spec:
                                 --dockerfile=\${WORKSPACE}/Dockerfile \
                                 --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
                                 --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:latest \
+                                --credential-helper=ecr-login \
                                 --cache=false \
                                 --skip-tls-verify=false \
                                 --verbosity=debug \
