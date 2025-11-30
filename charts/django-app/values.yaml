@@ -1,6 +1,6 @@
 image:
   repository: 601710820863.dkr.ecr.eu-central-1.amazonaws.com/lesson-5-ecr
-  tag: "26"
+  tag: "29"
   pullPolicy: Always
 
 service:
