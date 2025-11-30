@@ -128,7 +128,7 @@ spec:
                         echo "🔨 Building Docker image with Kaniko..."
                         echo "📦 Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
                         
-                        // Kaniko Build & Push zu ECR
+                        // Kaniko Build & Push zu ECR (AWS Credentials via ENV vars)
                         sh """
                             /kaniko/executor \
                                 --context=\${WORKSPACE} \
