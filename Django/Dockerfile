@@ -21,7 +21,7 @@ RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # Applikation kopieren
-COPY . .
+COPY app/ .
 
 # Non-root user erstellen
 RUN useradd -m -u 1000 django && \
