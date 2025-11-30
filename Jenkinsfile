@@ -16,6 +16,11 @@ spec:
     command:
     - /busybox/cat
     tty: true
+    env:
+    - name: AWS_REGION
+      value: eu-central-1
+    - name: AWS_SDK_LOAD_CONFIG
+      value: "true"
     volumeMounts:
     - name: docker-config
       mountPath: /kaniko/.docker
@@ -87,8 +92,9 @@ spec:
                                 --dockerfile=\${WORKSPACE}/Dockerfile \
                                 --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
                                 --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:latest \
-                                --cache=true \
-                                --compressed-caching=false \
+                                --cache=false \
+                                --skip-tls-verify=false \
+                                --verbosity=debug \
                                 --cleanup
                         """
                         
