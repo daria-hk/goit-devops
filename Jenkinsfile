@@ -125,7 +125,7 @@ spec:
                                     cd temp-repo
                                 else
                                     echo "📂 Using existing repository"
-                                    git pull origin main
+                                    git pull origin lesson-8-9
                                 fi
                                 
                                 # Values.yaml aktualisieren
@@ -143,7 +143,7 @@ spec:
                                     # Commit und Push
                                     git add ${VALUES_FILE}
                                     git commit -m "🚀 Update image tag to ${IMAGE_TAG} [Jenkins Build #${BUILD_NUMBER}]"
-                                    git push origin main
+                                    git push origin lesson-8-9
                                     
                                     echo "✅ Successfully pushed changes to Git!"
                                 fi
