@@ -9,6 +9,7 @@ Developer → Git Push → Jenkins Pipeline → ECR + Git → Argo CD → Kubern
 ```
 
 ### Components:
+
 - **Terraform**: Infrastructure as Code for AWS resources
 - **AWS EKS**: Managed Kubernetes cluster
 - **Jenkins**: CI/CD automation server (Build & Push)
@@ -89,6 +90,7 @@ terraform init
 ```
 
 This will:
+
 - Download required providers (AWS, Kubernetes, Helm)
 - Initialize modules
 - Configure S3 backend
@@ -100,6 +102,7 @@ terraform plan
 ```
 
 Review the resources that will be created:
+
 - VPC with 3 subnets
 - EKS cluster with 2x t3.medium nodes
 - ECR repository
@@ -136,12 +139,14 @@ kubectl get svc argocd-server -n argocd
 ### Step 7: Access Credentials
 
 **Jenkins:**
+
 ```bash
 # Username: admin
 # Password: admin123 (configured in jenkins/values.yaml)
 ```
 
 **Argo CD:**
+
 ```bash
 # Username: admin
 # Password:
@@ -155,6 +160,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 ### 1. Access Jenkins UI
 
 Get the LoadBalancer URL:
+
 ```bash
 kubectl get svc jenkins -n jenkins -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
@@ -162,6 +168,7 @@ kubectl get svc jenkins -n jenkins -o jsonpath='{.status.loadBalancer.ingress[0]
 Open in browser: `http://<JENKINS_URL>:8080`
 
 Login with:
+
 - **Username**: `admin`
 - **Password**: `admin123`
 
@@ -202,6 +209,7 @@ The Jenkins pipeline performs the following stages:
 ### 4. Check Build Success
 
 A successful build will show:
+
 ```
 ✅ Stage: Prepare ECR Authentication - SUCCESS
 ✅ Stage: Checkout Code - SUCCESS
@@ -229,6 +237,7 @@ aws ecr describe-images --repository-name lesson-5-ecr --region eu-central-1
 ### 1. Access Argo CD UI
 
 Get the LoadBalancer URL:
+
 ```bash
 kubectl get svc argocd-server -n argocd -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
@@ -236,6 +245,7 @@ kubectl get svc argocd-server -n argocd -o jsonpath='{.status.loadBalancer.ingre
 Open in browser: `http://<ARGOCD_URL>`
 
 Login with:
+
 - **Username**: `admin`
 - **Password**: (get from command below)
 
@@ -281,11 +291,12 @@ Argo CD is configured with **automatic synchronization**:
 ```yaml
 syncPolicy:
   automated:
-    prune: true      # Delete resources not in Git
-    selfHeal: true   # Auto-correct drift
+    prune: true # Delete resources not in Git
+    selfHeal: true # Auto-correct drift
 ```
 
 This means:
+
 - ✅ When Jenkins pushes new `values.yaml` → Argo CD syncs automatically
 - ✅ Changes are applied within ~3 minutes
 - ✅ Old resources are pruned
@@ -310,6 +321,7 @@ kubectl get svc django-service -n default -o jsonpath='{.status.loadBalancer.ing
 ### 6. View Sync History
 
 In Argo CD UI:
+
 1. Click on **"django-app"**
 2. Go to **"History and Rollback"** tab
 3. See all sync operations with:
@@ -364,6 +376,7 @@ kubectl get all -n jenkins
 ```
 
 Resources:
+
 - **Pod**: `jenkins-0` (StatefulSet)
 - **Service**: `jenkins` (LoadBalancer)
 - **PVC**: `jenkins-jenkins-0` (10Gi, gp2-csi)
@@ -377,7 +390,8 @@ kubectl get all -n argocd
 ```
 
 Resources:
-- **Pods**: 
+
+- **Pods**:
   - `argocd-server` (UI + API)
   - `argocd-application-controller` (Sync engine)
   - `argocd-repo-server` (Git repository access)
@@ -392,6 +406,7 @@ kubectl get all -n default
 ```
 
 Resources:
+
 - **Deployment**: `django-app` (2 replicas)
 - **Service**: `django-service` (LoadBalancer, port 80)
 - **HPA**: `django-hpa` (2-6 replicas, CPU 70%)
@@ -417,6 +432,7 @@ terraform destroy
 ```
 
 **Warning**: This will delete:
+
 - EKS cluster
 - All Kubernetes resources
 - ECR repository and images
@@ -427,12 +443,12 @@ terraform destroy
 
 ## 📊 Resource Requirements
 
-| Component | CPU | Memory | Storage |
-|-----------|-----|--------|---------|
-| EKS Nodes (2x t3.medium) | 2 vCPU each | 4 GB each | 20 GB each |
-| Jenkins Controller | 500m-2000m | 1-4 GB | 10 GB PVC |
-| Argo CD (total) | ~1000m | ~2 GB | - |
-| Django App (per pod) | 100m-500m | 128-512 MB | - |
+| Component                | CPU         | Memory     | Storage    |
+| ------------------------ | ----------- | ---------- | ---------- |
+| EKS Nodes (2x t3.medium) | 2 vCPU each | 4 GB each  | 20 GB each |
+| Jenkins Controller       | 500m-2000m  | 1-4 GB     | 10 GB PVC  |
+| Argo CD (total)          | ~1000m      | ~2 GB      | -          |
+| Django App (per pod)     | 100m-500m   | 128-512 MB | -          |
 
 **Estimated AWS Cost**: ~$100-150/month (eu-central-1)
 
@@ -458,6 +474,7 @@ kubectl logs jenkins-0 -n jenkins -c jenkins
 ```
 
 Common issues:
+
 - PVC not binding → Check EBS CSI driver
 - Out of memory → Increase node size or reduce Jenkins memory
 
@@ -469,6 +486,7 @@ kubectl logs -n argocd deployment/argocd-application-controller
 ```
 
 Common issues:
+
 - Git repository not accessible → Check GitHub PAT
 - Helm chart errors → Check `charts/django-app/values.yaml` syntax
 
@@ -480,6 +498,7 @@ kubectl describe pod <pod-name> -n default
 ```
 
 Common issues:
+
 - Missing database → Django app expects PostgreSQL
 - Missing secrets → Check `values.yaml` for `secrets` section
 
@@ -519,4 +538,3 @@ Common issues:
 **Last Updated**: 2025-11-30
 **Author**: daria-hk
 **License**: MIT
-
