@@ -10,6 +10,40 @@ metadata:
 spec:
   serviceAccountName: jenkins
   containers:
+  - name: aws-cli
+    image: amazon/aws-cli:latest
+    imagePullPolicy: Always
+    command:
+    - cat
+    tty: true
+    env:
+    - name: AWS_REGION
+      value: eu-central-1
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: aws-credentials
+          key: AWS_ACCESS_KEY_ID
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: aws-credentials
+          key: AWS_SECRET_ACCESS_KEY
+    - name: AWS_DEFAULT_REGION
+      valueFrom:
+        secretKeyRef:
+          name: aws-credentials
+          key: AWS_DEFAULT_REGION
+    volumeMounts:
+    - name: docker-config
+      mountPath: /kaniko-docker
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
   - name: kaniko
     image: gcr.io/kaniko-project/executor:v1.19.0-debug
     imagePullPolicy: Always
@@ -59,8 +93,7 @@ spec:
         memory: 128Mi
   volumes:
   - name: docker-config
-    secret:
-      secretName: docker-config
+    emptyDir: {}
 """
         }
     }
@@ -84,30 +117,35 @@ spec:
     }
     
     stages {
-        stage('Debug AWS Credentials') {
+        stage('Prepare ECR Authentication') {
             steps {
-                container('kaniko') {
+                container('aws-cli') {
                     script {
-                        echo "🔍 Checking AWS Environment Variables..."
+                        echo "🔐 Preparing ECR Docker config..."
                         sh '''
-                            echo "=== All Environment Variables with AWS ==="
-                            env | grep -i aws || echo "❌ No AWS env vars found!"
+                            # Get ECR registry URL
+                            ECR_URL="${ECR_REGISTRY}"
                             
-                            echo ""
-                            echo "=== Checking for IRSA Variables ==="
-                            echo "AWS_ROLE_ARN: ${AWS_ROLE_ARN:-NOT SET}"
-                            echo "AWS_WEB_IDENTITY_TOKEN_FILE: ${AWS_WEB_IDENTITY_TOKEN_FILE:-NOT SET}"
-                            echo "AWS_REGION: ${AWS_REGION:-NOT SET}"
+                            # Get ECR login password
+                            echo "📡 Getting ECR authorization token..."
+                            PASSWORD=$(aws ecr get-login-password --region eu-central-1)
                             
-                            echo ""
-                            echo "=== Files in /kaniko/.docker ==="
-                            ls -la /kaniko/.docker/ || echo "No docker config dir"
-                            cat /kaniko/.docker/config.json 2>/dev/null || echo "No config.json"
+                            # Create Docker config.json with ECR credentials
+                            echo "📝 Creating /kaniko-docker/config.json..."
+                            mkdir -p /kaniko-docker
+                            cat > /kaniko-docker/config.json << EOF
+{
+  "auths": {
+    "${ECR_URL}": {
+      "auth": "$(echo -n "AWS:${PASSWORD}" | base64 -w 0)"
+    }
+  }
+}
+EOF
                             
-                            echo ""
-                            echo "=== ServiceAccount Token ==="
-                            ls -la /var/run/secrets/kubernetes.io/serviceaccount/ || echo "No SA token"
-                            ls -la /var/run/secrets/eks.amazonaws.com/ 2>/dev/null || echo "No IRSA token (expected if IRSA not working)"
+                            echo "✅ ECR auth config created!"
+                            echo "🔍 Config file content:"
+                            cat /kaniko-docker/config.json
                         '''
                     }
                 }
@@ -135,9 +173,7 @@ spec:
                                 --dockerfile=\${WORKSPACE}/Dockerfile \
                                 --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
                                 --destination=${ECR_REGISTRY}/${ECR_REPOSITORY}:latest \
-                                --credential-helper=ecr-login \
                                 --cache=false \
-                                --skip-tls-verify=false \
                                 --verbosity=debug \
                                 --cleanup
                         """
