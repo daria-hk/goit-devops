@@ -21,11 +21,11 @@ spec:
       mountPath: /kaniko/.docker
     resources:
       requests:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 200m
+        memory: 512Mi
       limits:
-        cpu: 2000m
-        memory: 2Gi
+        cpu: 1000m
+        memory: 1Gi
   - name: git
     image: alpine/git:latest
     imagePullPolicy: Always
@@ -34,11 +34,11 @@ spec:
     tty: true
     resources:
       requests:
-        cpu: 100m
-        memory: 128Mi
+        cpu: 50m
+        memory: 64Mi
       limits:
-        cpu: 500m
-        memory: 512Mi
+        cpu: 200m
+        memory: 128Mi
   volumes:
   - name: docker-config
     secret:
