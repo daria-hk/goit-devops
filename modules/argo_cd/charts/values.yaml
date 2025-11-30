@@ -7,3 +7,10 @@ application:
   autoSync: true
   prune: true
   selfHeal: true
+
+repository:
+  enabled: true
+  name: github-repo
+  url: https://github.com/daria-hk/goit-devops.git
+  username: ""
+  password: ""
