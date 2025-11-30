@@ -75,22 +75,26 @@ spec:
             steps {
                 container('kaniko') {
                     script {
-                        echo "🔍 Checking AWS Credentials and ECR Access..."
+                        echo "🔍 Checking AWS Environment Variables..."
                         sh '''
-                            echo "=== Environment Variables ==="
-                            env | grep -i aws || echo "No AWS env vars found"
+                            echo "=== All Environment Variables with AWS ==="
+                            env | grep -i aws || echo "❌ No AWS env vars found!"
                             
                             echo ""
-                            echo "=== AWS Caller Identity ==="
-                            aws sts get-caller-identity --region eu-central-1 || echo "STS call failed"
+                            echo "=== Checking for IRSA Variables ==="
+                            echo "AWS_ROLE_ARN: ${AWS_ROLE_ARN:-NOT SET}"
+                            echo "AWS_WEB_IDENTITY_TOKEN_FILE: ${AWS_WEB_IDENTITY_TOKEN_FILE:-NOT SET}"
+                            echo "AWS_REGION: ${AWS_REGION:-NOT SET}"
                             
                             echo ""
-                            echo "=== ECR Repositories ==="
-                            aws ecr describe-repositories --repository-names lesson-5-ecr --region eu-central-1 || echo "ECR describe failed"
+                            echo "=== Files in /kaniko/.docker ==="
+                            ls -la /kaniko/.docker/ || echo "No docker config dir"
+                            cat /kaniko/.docker/config.json 2>/dev/null || echo "No config.json"
                             
                             echo ""
-                            echo "=== ECR Auth Token ==="
-                            aws ecr get-authorization-token --region eu-central-1 && echo "✅ Token obtained successfully!" || echo "❌ Failed to get token"
+                            echo "=== ServiceAccount Token ==="
+                            ls -la /var/run/secrets/kubernetes.io/serviceaccount/ || echo "No SA token"
+                            ls -la /var/run/secrets/eks.amazonaws.com/ 2>/dev/null || echo "No IRSA token (expected if IRSA not working)"
                         '''
                     }
                 }
