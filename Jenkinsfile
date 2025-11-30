@@ -201,6 +201,9 @@ EOF
                                 git config --global user.email "${GITHUB_EMAIL}"
                                 git config --global credential.helper store
                                 
+                                # Fix Git ownership issue in containers
+                                git config --global --add safe.directory '*'
+                                
                                 # Credentials für Git speichern
                                 echo "https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com" > ~/.git-credentials
                                 
