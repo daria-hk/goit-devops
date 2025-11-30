@@ -106,7 +106,7 @@ spec:
         IMAGE_TAG = "${BUILD_NUMBER}"
         
         // GitHub Konfiguration
-        GITHUB_CREDENTIALS_ID = 'github-credentials'
+        GITHUB_CREDENTIALS_ID = 'github-credential'
         GITHUB_REPO = 'https://github.com/daria-hk/goit-devops.git'
         GITHUB_USER = 'daria-hk'
         GITHUB_EMAIL = 'jenkins@daria-hk.com'
