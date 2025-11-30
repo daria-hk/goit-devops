@@ -6,17 +6,20 @@ This repository contains a complete CI/CD infrastructure deployed on AWS EKS usi
 
 ```
 Developer → Git Push → Jenkins Pipeline → ECR + Git → Argo CD → Kubernetes
+                                                                      ↓
+                                                      Prometheus + Grafana (Monitoring)
 ```
 
 ### Components:
 
 - **Terraform**: Infrastructure as Code for AWS resources
-- **AWS EKS**: Managed Kubernetes cluster
+- **AWS EKS**: Managed Kubernetes cluster with monitoring
 - **Jenkins**: CI/CD automation server (Build & Push)
 - **Argo CD**: GitOps continuous delivery (Sync & Deploy)
 - **ECR**: Docker image registry
 - **Kaniko**: Container image builder (rootless)
 - **RDS/Aurora**: Managed database service
+- **Prometheus + Grafana**: Monitoring and observability stack ([see MONITORING_README.md](./MONITORING_README.md))
 
 ---
 
@@ -27,12 +30,19 @@ goit-devops/
 ├── main.tf                    # Root Terraform configuration
 ├── backend.tf                 # S3 backend for Terraform state
 ├── terraform.tfvars           # Variables (GitHub PAT, AWS region, etc.)
-├── Jenkinsfile                # Jenkins CI/CD pipeline definition
-├── Dockerfile                 # Django application Dockerfile
+├── variables.tf               # Variable definitions
+├── outputs.tf                 # Terraform outputs
+│
+├── Django/                    # Django application
+│   ├── app/                   # Django project source
+│   ├── Jenkinsfile            # Jenkins CI/CD pipeline
+│   ├── Dockerfile             # Container image definition
+│   ├── requirements.txt       # Python dependencies
+│   └── docker-compose.yaml    # Local development setup
 │
 ├── modules/
 │   ├── s3-backend/            # S3 + DynamoDB for Terraform state
-│   ├── vpc/                   # VPC with 3 public subnets
+│   ├── vpc/                   # VPC with 3 public + 3 private subnets
 │   ├── ecr/                   # Elastic Container Registry
 │   ├── eks/                   # EKS cluster + node groups + EBS CSI driver
 │   ├── rds/                   # RDS/Aurora database module
@@ -46,7 +56,7 @@ goit-devops/
 │   │   ├── values.yaml        # Jenkins configuration (agents, plugins, etc.)
 │   │   └── variables.tf
 │   └── argo_cd/               # Argo CD Helm deployment
-│       ├── jenkins.tf         # Argo CD Helm release
+│       ├── argocd.tf          # Argo CD Helm release
 │       ├── values.yaml        # Argo CD configuration
 │       ├── variables.tf
 │       └── charts/            # Argo CD Application definitions
@@ -72,387 +82,91 @@ goit-devops/
 
 ## 🗄️ RDS/Aurora Database Module
 
-The project includes a flexible Terraform module for deploying production-ready databases on AWS. You can choose between a standard RDS instance or an Aurora cluster.
+The project includes a flexible database module supporting both standard RDS and Aurora clusters.
 
-### Module Features
+### Features
 
-- ✅ Create standard RDS instances (PostgreSQL, MySQL, MariaDB)
-- ✅ Create Aurora clusters with read replicas
+- ✅ Standard RDS (PostgreSQL, MySQL, MariaDB) or Aurora clusters
 - ✅ Multi-AZ deployments for high availability
-- ✅ Flexible parameter groups for database tuning
-- ✅ Automatic subnet groups and security groups
-- ✅ Support for public and private access
-- ✅ Automated backups configuration
+- ✅ Configurable backups and parameter groups
+- ✅ Support for public and private subnets
 
-### Basic Usage Example
+### Quick Start
 
-#### Standard RDS PostgreSQL Database
+**Standard RDS:**
 
 ```hcl
 module "rds" {
   source = "./modules/rds"
 
-  # Instance configuration
   name                       = "myapp-db"
   use_aurora                 = false
-
-  # Database engine
   engine                     = "postgres"
   engine_version             = "17.2"
-  parameter_group_family_rds = "postgres17"
-
-  # Instance specifications
   instance_class             = "db.t3.medium"
-  allocated_storage          = 20
 
-  # Database credentials
   db_name                    = "myapp"
   username                   = "postgres"
   password                   = "SecurePassword123!"
 
-  # Network configuration
   subnet_private_ids         = module.vpc.private_subnets
-  subnet_public_ids          = module.vpc.public_subnets
   vpc_id                     = module.vpc.vpc_id
-  publicly_accessible        = false
-
-  # High availability
   multi_az                   = true
-  backup_retention_period    = 7
-
-  # Custom database parameters
-  parameters = {
-    max_connections            = "200"
-    log_min_duration_statement = "500"
-  }
-
-  tags = {
-    Environment = "production"
-    Project     = "myapp"
-  }
-
-  depends_on = [module.vpc]
 }
 ```
 
-#### Aurora PostgreSQL Cluster
+**Aurora Cluster:**
 
 ```hcl
 module "aurora" {
   source = "./modules/rds"
 
-  # Cluster configuration
   name                         = "myapp-aurora"
   use_aurora                   = true
-  aurora_instance_count        = 3  # 1 primary + 2 replicas
-
-  # Aurora engine
+  aurora_instance_count        = 3
   engine_cluster               = "aurora-postgresql"
-  engine_version_cluster       = "15.3"
-  parameter_group_family_aurora = "aurora-postgresql15"
-
-  # Instance specifications
   instance_class               = "db.r5.large"
 
-  # Database credentials
   db_name                      = "myapp"
   username                     = "postgres"
   password                     = "SecurePassword123!"
 
-  # Network configuration
   subnet_private_ids           = module.vpc.private_subnets
-  subnet_public_ids            = module.vpc.public_subnets
   vpc_id                       = module.vpc.vpc_id
-  publicly_accessible          = false
-
-  # Backup configuration
-  backup_retention_period      = 14
-
-  # Custom cluster parameters
-  parameters = {
-    max_connections            = "500"
-    shared_buffers             = "{DBInstanceClassMemory/10240}"
-  }
-
-  tags = {
-    Environment = "production"
-    Project     = "myapp"
-  }
-
-  depends_on = [module.vpc]
 }
 ```
 
-### Module Variables
+### Key Variables
 
-#### Required Variables
+| Variable                | Description                               | Default       |
+| ----------------------- | ----------------------------------------- | ------------- |
+| `use_aurora`            | Use Aurora cluster instead of RDS         | `false`       |
+| `engine`                | RDS engine (postgres, mysql, mariadb)     | `postgres`    |
+| `instance_class`        | Instance size (db.t3.medium, db.r5.large) | `db.t3.micro` |
+| `multi_az`              | Enable Multi-AZ for RDS                   | `false`       |
+| `aurora_instance_count` | Number of instances in Aurora cluster     | `2`           |
+| `publicly_accessible`   | Allow public internet access              | `false`       |
 
-| Variable             | Type         | Description                                                        |
-| -------------------- | ------------ | ------------------------------------------------------------------ |
-| `name`               | string       | Name of the database instance or cluster (used as identifier)      |
-| `db_name`            | string       | Name of the default database to create                             |
-| `username`           | string       | Master username for database access                                |
-| `password`           | string       | Master password (sensitive, use AWS Secrets Manager in production) |
-| `vpc_id`             | string       | ID of the VPC where database will be deployed                      |
-| `subnet_private_ids` | list(string) | List of private subnet IDs for database placement                  |
-| `subnet_public_ids`  | list(string) | List of public subnet IDs (used if publicly_accessible = true)     |
+### Outputs
 
-#### Optional Variables
+**RDS:** `rds_endpoint`, `rds_address`, `rds_port`  
+**Aurora:** `aurora_cluster_endpoint`, `aurora_reader_endpoint`  
+**Common:** `db_name`, `db_username`, `security_group_id`
 
-| Variable                        | Type        | Default                 | Description                                                    |
-| ------------------------------- | ----------- | ----------------------- | -------------------------------------------------------------- |
-| `use_aurora`                    | bool        | `false`                 | If true, creates Aurora cluster instead of RDS instance        |
-| `engine`                        | string      | `"postgres"`            | Database engine for RDS (postgres, mysql, mariadb, etc.)       |
-| `engine_cluster`                | string      | `"aurora-postgresql"`   | Database engine for Aurora (aurora-postgresql, aurora-mysql)   |
-| `engine_version`                | string      | `"14.7"`                | Engine version for standard RDS                                |
-| `engine_version_cluster`        | string      | `"15.3"`                | Engine version for Aurora cluster                              |
-| `instance_class`                | string      | `"db.t3.micro"`         | Instance class (e.g., db.t3.medium, db.r5.large)               |
-| `allocated_storage`             | number      | `20`                    | Storage size in GB (RDS only, not used for Aurora)             |
-| `publicly_accessible`           | bool        | `false`                 | Whether database is accessible from internet                   |
-| `multi_az`                      | bool        | `false`                 | Enable Multi-AZ deployment for RDS (standby replica)           |
-| `backup_retention_period`       | number      | `7`                     | Number of days to retain automated backups (0-35)              |
-| `aurora_instance_count`         | number      | `2`                     | Number of instances in Aurora cluster (1 primary + N replicas) |
-| `parameter_group_family_rds`    | string      | `"postgres15"`          | Parameter group family for RDS                                 |
-| `parameter_group_family_aurora` | string      | `"aurora-postgresql15"` | Parameter group family for Aurora                              |
-| `parameters`                    | map(string) | `{}`                    | Custom database parameters (e.g., max_connections)             |
-| `tags`                          | map(string) | `{}`                    | Tags to apply to all resources                                 |
-
-### Module Outputs
-
-#### Standard RDS Outputs
-
-| Output         | Description                              |
-| -------------- | ---------------------------------------- |
-| `rds_endpoint` | Full endpoint for connection (host:port) |
-| `rds_address`  | DNS address of RDS instance              |
-| `rds_port`     | Port number for database connection      |
-| `rds_id`       | AWS resource ID of RDS instance          |
-
-#### Aurora Outputs
-
-| Output                    | Description                                        |
-| ------------------------- | -------------------------------------------------- |
-| `aurora_cluster_endpoint` | Write endpoint (primary instance)                  |
-| `aurora_reader_endpoint`  | Read-only endpoint (load balanced across replicas) |
-| `aurora_cluster_id`       | AWS resource ID of Aurora cluster                  |
-| `aurora_cluster_members`  | List of all cluster instance identifiers           |
-
-#### Common Outputs
-
-| Output              | Description                           |
-| ------------------- | ------------------------------------- |
-| `db_name`           | Name of the database                  |
-| `db_username`       | Master username (marked as sensitive) |
-| `security_group_id` | ID of the database security group     |
-| `subnet_group_name` | Name of the DB subnet group           |
-
-### How to Change Database Configuration
-
-#### Changing Database Engine
-
-**For RDS:**
-
-```hcl
-# PostgreSQL
-engine         = "postgres"
-engine_version = "17.2"
-parameter_group_family_rds = "postgres17"
-
-# MySQL
-engine         = "mysql"
-engine_version = "8.0.35"
-parameter_group_family_rds = "mysql8.0"
-
-# MariaDB
-engine         = "mariadb"
-engine_version = "10.11.6"
-parameter_group_family_rds = "mariadb10.11"
-```
-
-**For Aurora:**
-
-```hcl
-# Aurora PostgreSQL
-engine_cluster               = "aurora-postgresql"
-engine_version_cluster       = "15.3"
-parameter_group_family_aurora = "aurora-postgresql15"
-
-# Aurora MySQL
-engine_cluster               = "aurora-mysql"
-engine_version_cluster       = "8.0.mysql_aurora.3.04.0"
-parameter_group_family_aurora = "aurora-mysql8.0"
-```
-
-#### Changing Instance Class
-
-```hcl
-# Development/Testing
-instance_class = "db.t3.micro"   # 2 vCPU, 1 GB RAM - $13/month
-instance_class = "db.t3.small"   # 2 vCPU, 2 GB RAM - $26/month
-instance_class = "db.t3.medium"  # 2 vCPU, 4 GB RAM - $52/month
-
-# Production (General Purpose)
-instance_class = "db.m5.large"   # 2 vCPU, 8 GB RAM
-instance_class = "db.m5.xlarge"  # 4 vCPU, 16 GB RAM
-
-# Production (Memory Optimized)
-instance_class = "db.r5.large"   # 2 vCPU, 16 GB RAM
-instance_class = "db.r5.xlarge"  # 4 vCPU, 32 GB RAM
-
-# Aurora Serverless (auto-scaling)
-# For Aurora only - use db.serverless instance class
-```
-
-#### Changing Storage Configuration
-
-**For Standard RDS:**
-
-```hcl
-# Storage size
-allocated_storage = 20   # Minimum for gp2
-allocated_storage = 100  # Recommended for production
-
-# Note: Aurora storage auto-scales (10 GB to 128 TB)
-# No need to specify allocated_storage for Aurora
-```
-
-#### Switching Between RDS and Aurora
-
-**Change one variable:**
-
-```hcl
-# Use standard RDS
-use_aurora = false
-
-# Use Aurora cluster
-use_aurora = true
-aurora_instance_count = 3  # 1 primary + 2 replicas
-```
-
-#### Configuring High Availability
-
-**Multi-AZ for RDS:**
-
-```hcl
-multi_az = true  # Creates standby replica in different AZ
-```
-
-**Aurora Replicas:**
-
-```hcl
-use_aurora = true
-aurora_instance_count = 3  # More replicas = higher availability
-```
-
-#### Custom Database Parameters
-
-```hcl
-parameters = {
-  # Connection settings
-  max_connections              = "200"
-
-  # Logging
-  log_statement                = "all"
-  log_min_duration_statement   = "1000"  # Log queries > 1 second
-
-  # Memory
-  shared_buffers               = "256MB"
-  work_mem                     = "16MB"
-
-  # Performance
-  effective_cache_size         = "1GB"
-  random_page_cost             = "1.1"
-}
-```
-
-### Connection Examples
-
-#### Get Connection Details
+### Connection
 
 ```bash
-# Standard RDS
+# Get RDS endpoint
 terraform output rds_endpoint
-terraform output rds_address
 
-# Aurora
-terraform output aurora_cluster_endpoint  # For writes
-terraform output aurora_reader_endpoint   # For reads
-```
-
-#### Connect via psql (PostgreSQL)
-
-```bash
-# Standard RDS
+# Connect via psql
 psql -h $(terraform output -raw rds_address) -U postgres -d myapp
-
-# Aurora (write)
-psql -h $(terraform output -raw aurora_cluster_endpoint) -U postgres -d myapp
-
-# Aurora (read-only)
-psql -h $(terraform output -raw aurora_reader_endpoint) -U postgres -d myapp
 ```
 
-#### Connection String for Applications
+### When to Use
 
-```bash
-# Standard RDS
-postgresql://postgres:SecurePassword123!@myapp-db.xxxxx.eu-central-1.rds.amazonaws.com:5432/myapp
-
-# Aurora
-postgresql://postgres:SecurePassword123!@myapp-aurora.cluster-xxxxx.eu-central-1.rds.amazonaws.com:5432/myapp
-```
-
-### Security Best Practices
-
-1. **Use Private Subnets**
-
-   ```hcl
-   publicly_accessible = false
-   # Database will only be accessible from VPC
-   ```
-
-2. **Restrict Security Group**
-
-   - Modify `modules/rds/shared.tf` to limit CIDR blocks
-   - Default allows `0.0.0.0/0` - change to your specific IPs
-
-3. **Use Secrets Manager**
-
-   ```hcl
-   # Store password in AWS Secrets Manager
-   password = data.aws_secretsmanager_secret_version.db_password.secret_string
-   ```
-
-4. **Enable Encryption**
-
-   ```hcl
-   storage_encrypted = true  # Add to rds.tf
-   kms_key_id       = aws_kms_key.db.arn
-   ```
-
-5. **Regular Backups**
-   ```hcl
-   backup_retention_period = 14  # 2 weeks minimum
-   backup_window          = "03:00-04:00"
-   maintenance_window     = "mon:04:00-mon:05:00"
-   ```
-
-### When to Use RDS vs Aurora
-
-**Use Standard RDS if:**
-
-- Budget-conscious development/testing environment
-- Predictable, moderate workloads
-- Simple database requirements
-- Single-region deployment
-
-**Use Aurora if:**
-
-- Production workloads with high availability requirements
-- Read-heavy workloads (use reader endpoint with replicas)
-- Need for fast failover (< 30 seconds)
-- Global applications (Aurora Global Database)
-- Serverless requirements (Aurora Serverless)
+- **RDS**: Development, testing, simple workloads
+- **Aurora**: Production, high availability, read-heavy workloads
 
 ---
 
@@ -496,12 +210,13 @@ terraform plan
 
 Review the resources that will be created:
 
-- VPC with 3 public and 3 private subnets
+- VPC with 3 public and 3 private subnets across 3 availability zones
 - EKS cluster with 2x t3.medium nodes
-- ECR repository
+- ECR repository for Docker images
 - RDS PostgreSQL database (or Aurora cluster)
-- Jenkins (via Helm)
+- Jenkins controller (via Helm)
 - Argo CD (via Helm)
+- IAM roles and security groups
 
 ### Step 4: Apply Configuration
 
@@ -761,6 +476,29 @@ kubectl get pods -n default -l app=django-app
 
 ---
 
+## 📊 Monitoring with Prometheus & Grafana
+
+The project includes a complete monitoring stack for observability:
+
+- **Prometheus**: Metrics collection from Kubernetes and applications
+- **Grafana**: Visualization dashboards for cluster and application metrics
+- **Exporters**: Node-exporter, kube-state-metrics for comprehensive monitoring
+- **Service Discovery**: Automatic discovery of Kubernetes resources
+
+**📖 For complete monitoring setup and configuration, see [MONITORING_README.md](./MONITORING_README.md)**
+
+Quick access:
+
+```bash
+# Access Prometheus
+kubectl port-forward -n monitoring svc/prometheus-server 9090:80
+
+# Access Grafana
+kubectl port-forward -n monitoring svc/grafana 3000:80
+```
+
+---
+
 ## 🛠️ Kubernetes Components
 
 ### Jenkins (namespace: jenkins)
@@ -820,6 +558,8 @@ kubectl delete application django-app -n argocd
 # 2. Delete helm releases
 helm uninstall argocd -n argocd
 helm uninstall jenkins -n jenkins
+helm uninstall prometheus -n monitoring
+helm uninstall grafana -n monitoring
 
 # 3. Destroy Terraform resources
 terraform destroy
@@ -827,8 +567,8 @@ terraform destroy
 
 **Warning**: This will delete:
 
-- EKS cluster
-- All Kubernetes resources
+- EKS cluster and all Kubernetes resources
+- Monitoring stack (Prometheus, Grafana)
 - ECR repository and images
 - RDS database (final snapshot will be skipped)
 - VPC and networking
@@ -850,6 +590,7 @@ final_snapshot_identifier = "myapp-db-final-snapshot"
 | EKS Nodes (2x t3.medium) | 2 vCPU each | 4 GB each  | 20 GB each |
 | Jenkins Controller       | 500m-2000m  | 1-4 GB     | 10 GB PVC  |
 | Argo CD (total)          | ~1000m      | ~2 GB      | -          |
+| Prometheus + Grafana     | ~500m       | ~1 GB      | -          |
 | Django App (per pod)     | 100m-500m   | 128-512 MB | -          |
 | RDS db.t3.medium         | 2 vCPU      | 4 GB       | 20 GB gp2  |
 
@@ -949,18 +690,23 @@ Common issues:
 - Incorrect credentials
 - Database still initializing
 
+### Monitoring Issues
+
+For monitoring-specific troubleshooting (Prometheus targets, Grafana connectivity, etc.), refer to the **[MONITORING_README.md](./MONITORING_README.md)** troubleshooting section
+
 ---
 
 ## 📚 Technologies Used
 
 - **Terraform** v1.5+ - Infrastructure as Code
 - **AWS EKS** v1.31 - Kubernetes
-- **AWS RDS** - Managed relational database
-- **AWS Aurora** - High-performance managed database
-- **Jenkins** v2.528.2 - CI/CD
-- **Argo CD** v2.9.3 - GitOps
-- **Helm** v3.x - Package manager
-- **Kaniko** v1.19.0 - Container builder
+- **AWS RDS/Aurora** - Managed relational database
+- **Jenkins** v2.528.2 - CI/CD automation
+- **Argo CD** v2.9.3 - GitOps continuous delivery
+- **Prometheus** - Metrics collection and monitoring
+- **Grafana** - Visualization and dashboards
+- **Helm** v3.x - Kubernetes package manager
+- **Kaniko** v1.19.0 - Rootless container builder
 - **Docker** - Containerization
 - **PostgreSQL** v17.2 - Database engine
 - **Git** - Version control
@@ -971,10 +717,11 @@ Common issues:
 
 - [Jenkins Documentation](https://www.jenkins.io/doc/)
 - [Argo CD Documentation](https://argo-cd.readthedocs.io/)
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 - [EKS Best Practices](https://aws.github.io/aws-eks-best-practices/)
 - [AWS RDS Documentation](https://docs.aws.amazon.com/rds/)
-- [AWS Aurora Documentation](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/)
 - [Kaniko Documentation](https://github.com/GoogleContainerTools/kaniko)
 
 ---
@@ -983,13 +730,14 @@ Common issues:
 
 - ✅ Infrastructure deployed via Terraform
 - ✅ VPC with public and private subnets
-- ✅ EKS cluster with node groups
+- ✅ EKS cluster with node groups and EBS CSI driver
 - ✅ RDS/Aurora database module
-- ✅ Jenkins pipeline working
+- ✅ Jenkins CI/CD pipeline operational
 - ✅ Docker images building and pushing to ECR
 - ✅ Argo CD auto-sync enabled
 - ✅ Complete CI/CD flow functional
+- ✅ Prometheus + Grafana monitoring stack
 
-**Last Updated**: 2025-11-30
-**Author**: daria-hk
+**Last Updated**: 2025-11-30  
+**Author**: daria-hk  
 **License**: MIT
