@@ -177,7 +177,7 @@ spec:
         }
         always {
             echo "🧹 Cleaning up workspace..."
-            cleanWs()
+            deleteDir()
         }
     }
 }
